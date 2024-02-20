@@ -1,7 +1,7 @@
 use crate::models::{AppState, NewTicket, Ticket};
 use actix_web::{
-    post,get,
-    web::{Data, Json, Path},
+    post,
+    web::{Data, Json},
     HttpResponse, Responder,
 };
 
@@ -36,26 +36,5 @@ async fn generate_ticket(ticket_data: Json<NewTicket>, pool: Data<AppState>) -> 
                 "Error": err.to_string(),
             }))
         }
-    }
-}
-
-#[get("/ticket_verification/{ticket_id}")]
-async fn ticket_verification(ticket_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
-    let ticket_id = ticket_id.into_inner();
-
-    match sqlx::query_as!(
-        Ticket,
-        "SELECT 
-        *
-    FROM 
-        tickets
-    WHERE
-        ticket_id = $1 AND verified = FALSE",
-        ticker_id
-    )
-    .fetch_one(&pool.db)
-    .await {
-        Ok(data) => HttpResponse::Ok().body(""),
-        Err(err) => HttpResponse::BadGateway().body("")
     }
 }

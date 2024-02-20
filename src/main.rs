@@ -12,7 +12,7 @@ mod models;
 use crate::database::connect_database;
 use crate::models::AppState;
 use handler::{
-    booking_handler::book_ticket,
+    booking_handler::{book_ticket, ticket_verification},
     event_handlers::{
         check_and_update_events, create_event, get_event, get_event_by_user, get_events,
     },
@@ -39,17 +39,24 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .app_data(Data::new(AppState { db: pool.clone() }))
                 .route("/", web::get().to(greet))
-                .service(add_user)
-                .service(get_user)
-                .service(create_event)
+                .service(
+                    scope("/users")
+                    .service(get_user)
+                    .service(add_user)
+                )
                 .service(generate_ticket)
                 .service(
-                    scope("/get_event")
+                    scope("/events")
+                        .service(create_event)
                         .service(get_event)
-                        .service(get_event_by_user),
+                        .service(get_event_by_user)
+                        .service(get_events)
                 )
-                .service(get_events)
-                .service(book_ticket)
+                .service(
+                    scope("/bookings")
+                    .service(book_ticket)
+                    .service(ticket_verification)
+                )
         })
         .bind("127.0.0.1:8080")?
         .run()

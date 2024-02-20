@@ -27,7 +27,7 @@ pub struct Login {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Event {
     pub event_id: Uuid,
-    pub user_id : Option<Uuid>,
+    pub user_id: Option<Uuid>,
     pub event_name: String,
     pub event_date: NaiveDate,
     pub event_location: Option<String>,
@@ -38,7 +38,7 @@ pub struct Event {
 // Define the NewEvent struct for creating new events
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewEvent {
-    pub user_id : Uuid,
+    pub user_id: Uuid,
     pub event_name: String,
     pub event_date: NaiveDate,
     pub event_location: String,
@@ -53,9 +53,10 @@ pub struct Ticket {
     pub ticket_type: Option<String>,
     pub price: i32,
     pub availability: Option<i32>,
+   
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Deserialize, serde::Serialize)]
 pub struct EventWithTickets {
     pub event: Event,
     pub tickets: Vec<Ticket>,
@@ -63,8 +64,8 @@ pub struct EventWithTickets {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewTicket {
-    pub event_id : Uuid,
-    pub event_name : String,
+    pub event_id: Uuid,
+    pub event_name: String,
     pub ticket_type: String,
     pub price: i32,
     pub availability: i32,
@@ -79,6 +80,7 @@ pub struct Booking {
     pub quantity: i32,
     pub total_price: i32,
     pub booking_date: Option<NaiveDateTime>,
+    pub verified: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

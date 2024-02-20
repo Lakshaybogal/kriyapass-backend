@@ -1,4 +1,4 @@
-use crate::models::{AppState, Event, EventWithTickets, NewEvent, Ticket};
+use crate::models::{AppState, Event, EventWithTickets, NewEvent,Ticket};
 use actix_web::{
     get, post,
     web::{Data, Json, Path},
@@ -200,7 +200,7 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
     }
 }
 
-#[get("/get_events")]
+#[get("/")]
 async fn get_events(pool: Data<AppState>) -> impl Responder {
     // Query the database to get events with associated tickets
     let event_data = sqlx::query!(

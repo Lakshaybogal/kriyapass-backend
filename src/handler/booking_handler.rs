@@ -1,8 +1,8 @@
 use crate::models::{Booking, NewBooking};
 use crate::AppState;
 use actix_web::{
-    post,
-    web::{Data, Json},
+    get, post,
+    web::{Data, Json, Path},
     HttpResponse, Responder,
 };
 use serde_json::json;
@@ -61,3 +61,23 @@ pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>) -> imp
     response
 }
 
+#[get("/booking_verification/{booking_id}")]
+async fn ticket_verification(booking_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
+    let booking_id = booking_id.into_inner();
+
+    let result = sqlx::query!(
+        "UPDATE bookings SET verified = TRUE WHERE booking_id = $1 AND verified = FALSE RETURNING *",
+        booking_id
+    )
+    .fetch_optional(&pool.db)
+    .await;
+
+    match result {
+        Ok(Some(_)) => HttpResponse::Ok()
+            .json(json!({ "status": "success" })),
+        Ok(None) => HttpResponse::AlreadyReported()
+            .json(json!({ "error": "Already Scanned or Not Valid", "status": "fail" })),
+        Err(err) => HttpResponse::InternalServerError()
+            .json(json!({ "error": err.to_string(), "status": "fail" })),
+    }
+}
