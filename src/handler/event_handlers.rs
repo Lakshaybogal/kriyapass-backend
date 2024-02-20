@@ -4,10 +4,11 @@ use actix_web::{
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
+use chrono::Utc;
+use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use serde_json::json;
 
 // Handler for the create_user route
 #[post("/add_event")]
@@ -160,7 +161,7 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
                 // Create or update the event entry in the map
                 let event_tic = events_map.entry(data.event_id).or_insert(EventWithTickets {
                     event: Event {
-                        event_id : data.event_id,
+                        event_id: data.event_id,
                         user_id: data.user_id,
                         event_name: data.event_name.clone(),
                         event_description: data.event_description,
@@ -198,7 +199,6 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
         })),
     }
 }
-
 
 #[get("/get_events")]
 async fn get_events(pool: Data<AppState>) -> impl Responder {
@@ -273,4 +273,28 @@ async fn get_events(pool: Data<AppState>) -> impl Responder {
             "system_error" : err.to_string()
         })),
     }
+}
+
+pub async fn check_and_update_events(pool: Data<AppState>)  {
+
+        println!("Running scheduled task...");
+        let current_date = Utc::now().naive_utc().date();
+
+        // Execute SQL query to mark events as true where event_date <= current_date
+        let query_res = sqlx::query!(
+            "UPDATE events SET event_status = TRUE WHERE event_date <= $1",
+            current_date
+        )
+        .execute(&pool.db)
+        .await;
+
+        match query_res {
+            Ok(_) => {
+                println!("Events marked");
+            }
+            Err(err) => {
+                eprintln!("Failed to mark events: {:?}", err);
+            }
+        }
+
 }

@@ -1,7 +1,7 @@
 use crate::models::{AppState, NewTicket, Ticket};
 use actix_web::{
-    post,
-    web::{Data, Json},
+    post,get,
+    web::{Data, Json, Path},
     HttpResponse, Responder,
 };
 
@@ -11,19 +11,19 @@ use uuid::Uuid;
 #[post("/create_ticket")]
 async fn generate_ticket(ticket_data: Json<NewTicket>, pool: Data<AppState>) -> impl Responder {
     let ticket_insert = sqlx::query_as!(
-                Ticket,
-                "INSERT INTO tickets (event_id ,ticket_id, event_name,ticket_type, price, availability)
+        Ticket,
+        "INSERT INTO tickets (event_id ,ticket_id, event_name,ticket_type, price, availability)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *",
-                ticket_data.event_id,
-                Uuid::new_v4(),
-                ticket_data.event_name,
-                ticket_data.ticket_type,
-                ticket_data.price,
-                ticket_data.availability
-            )
-            .fetch_one(&pool.db)
-            .await;
+        ticket_data.event_id,
+        Uuid::new_v4(),
+        ticket_data.event_name,
+        ticket_data.ticket_type,
+        ticket_data.price,
+        ticket_data.availability
+    )
+    .fetch_one(&pool.db)
+    .await;
 
     match ticket_insert {
         Ok(ticket) => HttpResponse::Ok().json(json!({
@@ -36,5 +36,26 @@ async fn generate_ticket(ticket_data: Json<NewTicket>, pool: Data<AppState>) -> 
                 "Error": err.to_string(),
             }))
         }
+    }
+}
+
+#[get("/ticket_verification/{ticket_id}")]
+async fn ticket_verification(ticket_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
+    let ticket_id = ticket_id.into_inner();
+
+    match sqlx::query_as!(
+        Ticket,
+        "SELECT 
+        *
+    FROM 
+        tickets
+    WHERE
+        ticket_id = $1 AND verified = FALSE",
+        ticker_id
+    )
+    .fetch_one(&pool.db)
+    .await {
+        Ok(data) => HttpResponse::Ok().body(""),
+        Err(err) => HttpResponse::BadGateway().body("")
     }
 }
