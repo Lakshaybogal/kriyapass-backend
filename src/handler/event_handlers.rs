@@ -1,6 +1,9 @@
-use crate::models::{AppState, Event, EventWithTickets, NewEvent,Ticket};
+use crate::{
+    jwt_auth,
+    models::{AppState, Event, EventWithTickets, NewEvent, Ticket},
+};
 use actix_web::{
-    get, post,
+    delete, get, post,
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
@@ -9,12 +12,15 @@ use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-
 // Handler for the create_user route
 #[post("/add_event")]
-async fn create_event(event_data: Json<NewEvent>, pool: Data<AppState>) -> impl Responder {
+async fn create_event(
+    event_data: Json<NewEvent>,
+    pool: Data<AppState>,
+    jwt_guard: jwt_auth::JwtMiddleware,
+) -> impl Responder {
     let event = event_data.into_inner();
-
+    let user_id = jwt_guard.user.user_id;
     // Execute the SQL query to insert a new event into the database
     let query_res = sqlx::query_as!(
         Event,
@@ -22,7 +28,7 @@ async fn create_event(event_data: Json<NewEvent>, pool: Data<AppState>) -> impl 
          VALUES ($1, $2, $3, $4, $5,$6)
          RETURNING *",
         Uuid::new_v4(),
-        event.user_id,
+        user_id,
         event.event_name,
         event.event_date,
         event.event_location,
@@ -55,7 +61,7 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
     let event_id = event_id.into_inner();
     let event_data = sqlx::query!(
         "SELECT
-            t.ticket_id AS ticket_id, 
+            t.ticket_id AS ticket_id,
             t.ticket_type AS ticket_type,
             t.price AS price,
             t.availability AS availability,
@@ -69,7 +75,7 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
         FROM
             tickets AS t
         LEFT JOIN
-            events AS e ON t.event_id = e.event_id 
+            events AS e ON t.event_id = e.event_id
         WHERE
         e.event_id = $1
         ",
@@ -90,7 +96,7 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
                         user_id: data.user_id,
                         event_name: data.event_name.clone(),
                         event_description: data.event_description,
-                        event_location: Some(data.event_location),
+                        event_location: data.event_location,
                         event_date: data.event_date,
                         event_status: data.event_status,
                     },
@@ -100,11 +106,11 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
                 // Add the ticket to the event's tickets list
                 event_tic.tickets.push(Ticket {
                     ticket_id: data.ticket_id,
-                    ticket_type: Some(data.ticket_type),
+                    ticket_type: data.ticket_type,
                     event_id: Some(data.event_id),
                     event_name: Some(data.event_name),
                     price: data.price,
-                    availability: Some(data.availability),
+                    availability: data.availability,
                 });
             }
 
@@ -125,12 +131,16 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
     }
 }
 
-#[get("/user/{user_id}")]
-async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
-    let user_id = user_id.into_inner();
+#[get("/user")]
+async fn get_event_by_user(
+    pool: Data<AppState>,
+    jwt_guard: jwt_auth::JwtMiddleware,
+) -> impl Responder {
+    let user_id = jwt_guard.user.user_id;
+    // let user_id = token_details.user_id;
     let event_data = sqlx::query!(
         "SELECT
-            t.ticket_id AS ticket_id, 
+            t.ticket_id AS ticket_id,
             t.ticket_type AS ticket_type,
             t.price AS price,
             t.availability AS availability,
@@ -144,9 +154,9 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
         FROM
             tickets AS t
         LEFT JOIN
-            events AS e ON t.event_id = e.event_id 
+            events AS e ON t.event_id = e.event_id
         WHERE
-        e.user_id = $1
+            e.user_id = $1
         ",
         user_id
     )
@@ -165,7 +175,7 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
                         user_id: data.user_id,
                         event_name: data.event_name.clone(),
                         event_description: data.event_description,
-                        event_location: Some(data.event_location),
+                        event_location: data.event_location,
                         event_date: data.event_date,
                         event_status: data.event_status,
                     },
@@ -175,11 +185,11 @@ async fn get_event_by_user(user_id: Path<Uuid>, pool: Data<AppState>) -> impl Re
                 // Add the ticket to the event's tickets list
                 event_tic.tickets.push(Ticket {
                     ticket_id: data.ticket_id,
-                    ticket_type: Some(data.ticket_type),
+                    ticket_type: data.ticket_type,
                     event_id: Some(data.event_id),
                     event_name: Some(data.event_name),
                     price: data.price,
-                    availability: Some(data.availability),
+                    availability: data.availability,
                 });
             }
 
@@ -206,7 +216,7 @@ async fn get_events(pool: Data<AppState>) -> impl Responder {
     let event_data = sqlx::query!(
         "
         SELECT
-            t.ticket_id AS ticket_id, 
+            t.ticket_id AS ticket_id,
             e.user_id AS user_id,
             t.ticket_type AS ticket_type,
             t.price AS price,
@@ -250,11 +260,11 @@ async fn get_events(pool: Data<AppState>) -> impl Responder {
                 // Add the ticket to the event's tickets list
                 event_tic.tickets.push(Ticket {
                     ticket_id: data.ticket_id,
-                    ticket_type: Some(data.ticket_type),
+                    ticket_type: data.ticket_type,
                     event_id: data.event_id,
                     event_name: data.event_name,
                     price: data.price,
-                    availability: Some(data.availability),
+                    availability: data.availability,
                 });
             }
 
@@ -275,26 +285,41 @@ async fn get_events(pool: Data<AppState>) -> impl Responder {
     }
 }
 
-pub async fn check_and_update_events(pool: Data<AppState>)  {
-
-        println!("Running scheduled task...");
-        let current_date = Utc::now().naive_utc().date();
-
-        // Execute SQL query to mark events as true where event_date <= current_date
-        let query_res = sqlx::query!(
-            "UPDATE events SET event_status = TRUE WHERE event_date <= $1",
-            current_date
-        )
+#[delete("/delete/{event_id}")]
+async fn delete_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
+    let event_id = event_id.into_inner();
+    match sqlx::query!("DELETE FROM events where event_id = $1", event_id)
         .execute(&pool.db)
-        .await;
+        .await
+    {
+        Ok(_) => HttpResponse::Ok().json(json!({
+            "status" : "success"
+        })),
+        Err(err) => HttpResponse::InternalServerError().json(json!({
+            "status" : "fail",
+            "error" : err.to_string()
+        })),
+    }
+}
 
-        match query_res {
-            Ok(_) => {
-                println!("Events marked");
-            }
-            Err(err) => {
-                eprintln!("Failed to mark events: {:?}", err);
-            }
+pub async fn check_and_update_events(pool: Data<AppState>) {
+    println!("Running scheduled task...");
+    let current_date = Utc::now().naive_utc().date();
+
+    // Execute SQL query to mark events as true where event_date <= current_date
+    let query_res = sqlx::query!(
+        "UPDATE events SET event_status = TRUE WHERE event_date <= $1",
+        current_date
+    )
+    .execute(&pool.db)
+    .await;
+
+    match query_res {
+        Ok(_) => {
+            println!("Events marked");
         }
-
+        Err(err) => {
+            eprintln!("Failed to mark events: {:?}", err);
+        }
+    }
 }

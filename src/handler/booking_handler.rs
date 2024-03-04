@@ -1,7 +1,7 @@
 use crate::models::{Booking, NewBooking};
-use crate::AppState;
+use crate::{jwt_auth, AppState};
 use actix_web::{
-    get, post,
+    delete, patch, post,
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
@@ -9,9 +9,9 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[post("/book_ticket")]
-pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>) -> impl Responder {
+pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>,jwt_guard : jwt_auth::JwtMiddleware) -> impl Responder {
     let booking = booking.into_inner();
-
+    let user_id = jwt_guard.user.user_id;
     // Calculate total price if both quantity and price are present
     let total_price = booking.quantity * booking.price;
     let booking_id = Uuid::new_v4();
@@ -24,7 +24,7 @@ pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>) -> imp
         booking_id,
         booking.event_name,
         booking.ticket_id,
-        booking.user_id,
+        user_id,
         booking.quantity,
         total_price
     )
@@ -61,11 +61,12 @@ pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>) -> imp
     response
 }
 
-#[get("/booking_verification/{booking_id}")]
+#[patch("/booking_verification/{booking_id}")]
 async fn ticket_verification(booking_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
     let booking_id = booking_id.into_inner();
 
-    let result = sqlx::query!(
+    let result = sqlx::query_as!(
+        Booking,
         "UPDATE bookings SET verified = TRUE WHERE booking_id = $1 AND verified = FALSE RETURNING *",
         booking_id
     )
@@ -73,11 +74,27 @@ async fn ticket_verification(booking_id: Path<Uuid>, pool: Data<AppState>) -> im
     .await;
 
     match result {
-        Ok(Some(_)) => HttpResponse::Ok()
-            .json(json!({ "status": "success" })),
+        Ok(Some(_)) => HttpResponse::Ok().json(json!({ "status": "success" })),
         Ok(None) => HttpResponse::AlreadyReported()
             .json(json!({ "error": "Already Scanned or Not Valid", "status": "fail" })),
         Err(err) => HttpResponse::InternalServerError()
             .json(json!({ "error": err.to_string(), "status": "fail" })),
+    }
+}
+
+#[delete("/delete/{booking_id}")]
+async fn delete_booking(booking_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
+    let booking_id = booking_id.into_inner();
+    match sqlx::query!("DELETE FROM bookings where booking_id = $1", booking_id)
+        .execute(&pool.db)
+        .await
+    {
+        Ok(_) => HttpResponse::Ok().json(json!({
+            "status" : "success"
+        })),
+        Err(err) => HttpResponse::InternalServerError().json(json!({
+            "status" : "fail",
+            "error" : err.to_string()
+        })),
     }
 }

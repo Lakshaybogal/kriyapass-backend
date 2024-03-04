@@ -2,7 +2,7 @@
 name = "kriyapass"
 version = "0.1.0"
 edition = "2021"
-author = "Lakshay Bogal"
+authors = ["Lakshay Bogal"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -28,3 +28,7 @@ uuid = { version = "1.7.0", features = [
     "macro-diagnostics",
     "serde" # Enable better diagnostics for compile-time UUIDs
 ] }
+env_logger = "0.11.0"
+base64 = "0.21.7"
+jsonwebtoken = "9.2.0"
+futures = "0.3.30"
