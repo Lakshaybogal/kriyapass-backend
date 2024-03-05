@@ -44,7 +44,7 @@ pub struct Booking {
     pub booking_id: Uuid,
     pub user_id: Option<Uuid>,
     pub event_id: Option<Uuid>,
-    pub event_name:  Option<String>,
+    pub event_name: Option<String>,
     pub ticket_id: Option<Uuid>,
     pub quantity: i32,
     pub total_price: i32,
@@ -61,9 +61,8 @@ pub struct Login {
 // Define the NewEvent struct for creating new events
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewEvent {
-    pub user_id: Uuid,
     pub event_name: String,
-    pub event_date: NaiveDate,
+    pub event_date: String,
     pub event_location: String,
     pub event_description: String,
 }

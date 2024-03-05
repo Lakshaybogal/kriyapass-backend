@@ -23,7 +23,7 @@ use handler::{
         get_events,
     },
     ticket_handlers::{delete_ticket, generate_ticket},
-    user_handlers::{add_user, delete_user, get_user, refresh_access_token_handler, test},
+    user_handlers::{add_user, delete_user, get_user, refresh_access_token_handler},
 };
 
 // Main function
@@ -67,7 +67,6 @@ async fn main() -> std::io::Result<()> {
                     .service(get_user)
                     .service(add_user)
                     .service(refresh_access_token_handler)
-                    .service(test)
                     .service(delete_user),
             )
             .service(

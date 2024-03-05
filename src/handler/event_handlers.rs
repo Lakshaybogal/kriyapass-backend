@@ -7,7 +7,7 @@ use actix_web::{
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
-use chrono::Utc;
+use chrono::{NaiveDate, Utc};
 use serde_json::json;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -15,24 +15,26 @@ use uuid::Uuid;
 // Handler for the create_user route
 #[post("/add_event")]
 async fn create_event(
+    jwt_guard: jwt_auth::JwtMiddleware,
     event_data: Json<NewEvent>,
     pool: Data<AppState>,
-    jwt_guard: jwt_auth::JwtMiddleware,
 ) -> impl Responder {
     let event = event_data.into_inner();
-    let user_id = jwt_guard.user.user_id;
+    let event_date = NaiveDate::parse_from_str(&event.event_date, "%Y-%m-%d")
+        .expect("Failed to parse event_date");
     // Execute the SQL query to insert a new event into the database
     let query_res = sqlx::query_as!(
         Event,
-        "INSERT INTO events (event_id ,user_id,event_name, event_date, event_location, event_description)
-         VALUES ($1, $2, $3, $4, $5,$6)
+        "INSERT INTO events (event_id ,user_id ,event_name, event_date, event_location, event_description,event_status)
+         VALUES ($1, $2, $3, $4, $5,$6,$7)
          RETURNING *",
         Uuid::new_v4(),
-        user_id,
+        jwt_guard.user.user_id,
         event.event_name,
-        event.event_date,
+        event_date,
         event.event_location,
-        event.event_description
+        event.event_description,
+        false,
     )
     .fetch_one(&pool.db)
     .await;

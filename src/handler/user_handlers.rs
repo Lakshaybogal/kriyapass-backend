@@ -130,20 +130,25 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
         };
 
         // Build access and refresh cookies
-        let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
-            .http_only(false)
-            .max_age(Duration::minutes(
-                env::var("ACCESS_TOKEN_AGE")
+        let refresh_cookie = Cookie::build("refresh_token", refresh_token.token.clone().unwrap())
+            .path("/")
+            .http_only(true)
+            .same_site(actix_web::cookie::SameSite::None)
+            .secure(true)
+            .max_age(Duration::days(
+                env::var("REFRESH_TOKEN_AGE")
                     .unwrap()
                     .parse::<i64>()
                     .unwrap(),
             ))
             .finish();
-
-        let refresh_cookie = Cookie::build("refresh_token", refresh_token.token.clone().unwrap())
+        let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
+            .path("/")
             .http_only(true)
+            .secure(true)
+            .same_site(actix_web::cookie::SameSite::None)
             .max_age(Duration::days(
-                env::var("REFRESH_TOKEN_AGE")
+                env::var("ACCESS_TOKEN_AGE")
                     .unwrap()
                     .parse::<i64>()
                     .unwrap(),
@@ -163,44 +168,17 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
                     "l_name" : user.last_name,
                     "phone_number" : user.phone_number,
                 }),
-                "access_token" : access_token.token.unwrap(),
-                "refresh_token" : refresh_token.token.unwrap()
+                "access_token" : access_token.token.unwrap()
             }))
     } else {
         // Password doesn't match
         HttpResponse::BadRequest().json(json!({ "error": "Wrong Password" }))
     }
 }
-#[get("/test")]
-async fn test(req: HttpRequest) -> impl Responder {
-    if let Some(authorization_header) = req.headers().get("Authorization") {
-        if let Ok(header_value) = authorization_header.to_str() {
-            if header_value.starts_with("Bearer ") {
-                // Extract the token by splitting the header value
-                let token = header_value.trim_start_matches("Bearer ").trim();
-                // Print the token for debugging purposes
-                println!("Token: {}", token);
-                return HttpResponse::Ok().json(json!({
-                    "status": "success",
-                    "message": "Token extracted successfully",
-                    "token": token,
-                }));
-            }
-        }
-    }
 
-    // If token extraction fails (either the header is missing or not in the expected format)
-    HttpResponse::Forbidden().json(json!({
-        "status": "fail",
-        "message": "Token extraction failed",
-    }))
-
-    // HttpResponse::Ok().json(json!({"status": "success", "message": "test"}))
-}
 #[get("/refresh")]
 async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) -> impl Responder {
     // Extract refresh token from Authorization header
-
     let refresh_token = match req.cookie("refresh_token") {
         Some(c) => c.value().to_string(),
         None => {
@@ -208,7 +186,6 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
                 .json(serde_json::json!({"status": "fail", "message": "Cookie not present"}));
         }
     };
-
     // Verify refresh token
     let refresh_token_details = match verify_jwt_token(
         env::var("REFRESH_SECRET_KEY").unwrap().to_string(),
@@ -220,19 +197,6 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
                 .json(serde_json::json!({"status": "fail", "message": format!("Failed to verify refresh token: {:?}", e)}));
         }
     };
-
-    // Generate new access token
-    let access_token_details = match generate_jwt_token(
-        refresh_token_details.user_id,
-        env::var("ACCESS_SECRET_KEY").unwrap(),
-    ) {
-        Ok(token_details) => token_details,
-        Err(e) => {
-            return HttpResponse::BadGateway()
-                .json(serde_json::json!({"status": "fail", "message": format!("Failed to generate access token: {:?}", e)}));
-        }
-    };
-
     // Fetch user data
     let user = match sqlx::query_as!(
         User,
@@ -245,20 +209,33 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
         Ok(user) => user,
         Err(err) => {
             return HttpResponse::InternalServerError().json(
-                json!({ "status": "fail", "message": format!("Failed to fetch user: {}", err) }),
+                json!({ "status": "fail", "message": format!("Failed to fetch user: {:?}", err) }),
             );
         }
     };
-
+    // Generate new access token
+    let access_token = match generate_jwt_token(
+        refresh_token_details.user_id,
+        env::var("ACCESS_SECRET_KEY").unwrap(),
+    ) {
+        Ok(token_details) => token_details,
+        Err(e) => {
+            return HttpResponse::BadGateway()
+                .json(serde_json::json!({"status": "fail", "message": format!("Failed to generate access token: {:?}", e)}));
+        }
+    };
     // Set new access token cookie
-    let access_cookie = Cookie::build("access_token", access_token_details.token.clone().unwrap())
-        .max_age(Duration::minutes(
+    let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
+        .path("/")
+        .http_only(true)
+        .same_site(actix_web::cookie::SameSite::None)
+        .secure(true)
+        .max_age(Duration::days(
             env::var("ACCESS_TOKEN_AGE")
                 .unwrap()
                 .parse::<i64>()
                 .unwrap(),
         ))
-        .http_only(true) // HTTP-only to prevent XSS attacks
         .finish();
 
     // Return response with new access token, refresh token, and user data
@@ -271,8 +248,7 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
             "last_name": user.last_name,
             "phone_number": user.phone_number
         },
-        "access_token": access_token_details.token.unwrap(),
-        "refresh_token": refresh_token
+        "access_token": access_token.token,
     }))
 }
 

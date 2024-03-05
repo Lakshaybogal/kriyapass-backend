@@ -6,7 +6,7 @@ use std::{
 
 use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
 use actix_web::{dev::Payload, Error as ActixWebError};
-use actix_web::{http, web, FromRequest, HttpRequest};
+use actix_web::{web, FromRequest, HttpRequest};
 use futures::executor::block_on;
 use serde::{Deserialize, Serialize};
 
@@ -36,38 +36,22 @@ impl FromRequest for JwtMiddleware {
     type Future = Ready<Result<Self, Self::Error>>;
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         let data = req.app_data::<web::Data<AppState>>().unwrap();
+        let data = data;
 
-        // let access_token = match req.cookie("access_token") {
-        //     Some(c) => c.to_string(),
-        //     None => {
-        //         let json_error = ErrorResponse {
-        //             status: "fail".to_string(),
-        //             message: "You are not logged in, please provide token".to_string(),
-        //         };
-        //         return ready(Err(ErrorUnauthorized(json_error)));
-        //     }
-        // };
-
-        let access_token = req
-            .cookie("access_token")
-            .map(|c| c.value().to_string())
-            .or_else(|| {
-                req.headers()
-                    .get(http::header::AUTHORIZATION)
-                    .map(|h| h.to_str().unwrap().split_at(7).1.to_string())
-            });
-
-        if access_token.is_none() {
-            let json_error = ErrorResponse {
-                status: "fail".to_string(),
-                message: "You are not logged in, please provide token".to_string(),
-            };
-            return ready(Err(ErrorUnauthorized(json_error)));
-        }
+        let access_token = match req.cookie("access_token") {
+            Some(c) => c.value().to_string(),
+            None => {
+                let json_error = ErrorResponse {
+                    status: "fail".to_string(),
+                    message: format!("{:?}", "cookie not found"),
+                };
+                return ready(Err(ErrorUnauthorized(json_error)));
+            }
+        };
 
         let access_token_details = match token::verify_jwt_token(
             env::var("ACCESS_SECRET_KEY").unwrap().to_string(),
-            &access_token.unwrap(),
+            &access_token,
         ) {
             Ok(token_details) => token_details,
             Err(e) => {
