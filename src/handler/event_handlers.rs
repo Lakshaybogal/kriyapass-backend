@@ -215,71 +215,23 @@ async fn get_event_by_user(
 #[get("/")]
 async fn get_events(pool: Data<AppState>) -> impl Responder {
     // Query the database to get events with associated tickets
-    let event_data = sqlx::query!(
+    let event_data = sqlx::query_as!(
+        Event,
         "
         SELECT
-            t.ticket_id AS ticket_id,
-            e.user_id AS user_id,
-            t.ticket_type AS ticket_type,
-            t.price AS price,
-            t.availability AS availability,
-            e.event_id AS event_id,
-            e.event_name AS event_name,
-            e.event_date AS event_date,
-            e.event_location AS event_location,
-            e.event_description AS event_description,
-            e.event_status AS event_status
+           *
         FROM
-            tickets AS t
-        LEFT JOIN
-            events AS e ON t.event_id = e.event_id
+            events
         ",
     )
     .fetch_all(&pool.db)
     .await;
 
     match event_data {
-        Ok(events_ticket_data) => {
-            let mut events_map: HashMap<Uuid, EventWithTickets> = HashMap::new();
-
-            for data in events_ticket_data {
-                let event_id = data.event_id.unwrap_or_default();
-
-                // Create or update the event entry in the map
-                let event_tic = events_map.entry(event_id).or_insert(EventWithTickets {
-                    event: Event {
-                        event_id,
-                        user_id: data.user_id,
-                        event_name: data.event_name.clone().unwrap_or_default(),
-                        event_description: data.event_description,
-                        event_location: data.event_location,
-                        event_date: data.event_date.unwrap_or_default(),
-                        event_status: data.event_status.unwrap_or_default(),
-                    },
-                    tickets: Vec::new(),
-                });
-
-                // Add the ticket to the event's tickets list
-                event_tic.tickets.push(Ticket {
-                    ticket_id: data.ticket_id,
-                    ticket_type: data.ticket_type,
-                    event_id: data.event_id,
-                    event_name: data.event_name,
-                    price: data.price,
-                    availability: data.availability,
-                });
-            }
-
-            let events: Vec<EventWithTickets> = events_map
-                .into_iter()
-                .map(|(_, event_tic)| event_tic)
-                .collect();
-
-            HttpResponse::Ok().json(json!({
-                "status": "success",
-                "data": events
-            }))
-        }
+        Ok(events) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": events
+        })),
         Err(err) => HttpResponse::NotFound().json(json!({
             "error" : "Event Not Found",
             "system_error" : err.to_string()

@@ -36,7 +36,6 @@ impl FromRequest for JwtMiddleware {
     type Future = Ready<Result<Self, Self::Error>>;
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         let data = req.app_data::<web::Data<AppState>>().unwrap();
-        let data = data;
 
         let access_token = match req.cookie("access_token") {
             Some(c) => c.value().to_string(),

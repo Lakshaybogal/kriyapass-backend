@@ -9,7 +9,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[post("/book_ticket")]
-pub async fn book_ticket(booking: Json<NewBooking>, pool: Data<AppState>,jwt_guard : jwt_auth::JwtMiddleware) -> impl Responder {
+pub async fn book_ticket(
+    booking: Json<NewBooking>,
+    pool: Data<AppState>,
+    jwt_guard: jwt_auth::JwtMiddleware,
+) -> impl Responder {
     let booking = booking.into_inner();
     let user_id = jwt_guard.user.user_id;
     // Calculate total price if both quantity and price are present
@@ -76,7 +80,8 @@ async fn ticket_verification(booking_id: Path<Uuid>, pool: Data<AppState>) -> im
     match result {
         Ok(Some(_)) => HttpResponse::Ok().json(json!({ "status": "success" })),
         Ok(None) => HttpResponse::AlreadyReported()
-            .json(json!({ "error": "Already Scanned or Not Valid", "status": "fail" })),
+            .json(json!({ "error": "Already scanned or not valid ",
+                "status": "fail" })),
         Err(err) => HttpResponse::InternalServerError()
             .json(json!({ "error": err.to_string(), "status": "fail" })),
     }
