@@ -9,11 +9,11 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[post("/book_ticket")]
-pub async fn book_ticket(
+async fn book_ticket(
     booking: Json<NewBooking>,
     pool: Data<AppState>,
     jwt_guard: jwt_auth::JwtMiddleware,
-) -> impl Responder {
+) -> HttpResponse {
     let booking = booking.into_inner();
     let user_id = jwt_guard.user.user_id;
     // Calculate total price if both quantity and price are present
@@ -35,17 +35,16 @@ pub async fn book_ticket(
     .fetch_one(&pool.db)
     .await;
 
-    let response = match query_res {
+    match query_res {
         Ok(data) => {
-            let update_res = sqlx::query!(
+            match sqlx::query!(
                 "UPDATE tickets SET availability = availability - $1 WHERE ticket_id = $2",
                 data.quantity,
                 data.ticket_id
             )
             .execute(&pool.db)
-            .await;
-
-            match update_res {
+            .await
+            {
                 Ok(_) => HttpResponse::Ok().json(json!({
                     "status": "success",
                     "data": data
@@ -60,9 +59,7 @@ pub async fn book_ticket(
             "status": "fail",
             "error": format!("Failed to book ticket: {}", err)
         })),
-    };
-
-    response
+    }
 }
 
 #[patch("/booking_verification/{booking_id}")]

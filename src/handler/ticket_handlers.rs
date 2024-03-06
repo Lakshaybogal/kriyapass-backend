@@ -3,7 +3,7 @@ use crate::{
     models::{AppState, NewTicket, Ticket},
 };
 use actix_web::{
-    delete, post,
+    delete, get, post,
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
@@ -53,7 +53,31 @@ async fn generate_ticket(
         }))
     }
 }
-
+#[get("/get_ticket/{event_id}")]
+async fn get_ticket(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
+    let event_id = event_id.into_inner();
+    match sqlx::query_as!(
+        Ticket,
+        "
+        SELECT * FROM tickets WHERE event_id = $1
+        ",
+        event_id
+    )
+    .fetch_all(&pool.db)
+    .await
+    {
+        Ok(data) => HttpResponse::Ok().json(json!({
+            "status" : "success",
+            "data" : data
+        })),
+        Err(err) => HttpResponse::BadGateway().json(json!(
+            {
+                "status" : "fail",
+                "error" : err.to_string()
+            }
+        )),
+    }
+}
 #[delete("/delete/{ticket_id}")]
 async fn delete_ticket(ticket_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
     let ticket_id = ticket_id.into_inner();

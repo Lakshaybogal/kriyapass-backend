@@ -88,7 +88,6 @@ async fn main() -> std::io::Result<()> {
                     .service(ticket_verification)
                     .service(delete_booking),
             )
-           
             .wrap(Logger::default())
     })
     .bind("127.0.0.1:8080")?
