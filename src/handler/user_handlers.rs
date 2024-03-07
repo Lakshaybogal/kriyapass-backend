@@ -38,38 +38,69 @@ pub async fn add_user(user: Json<NewUser>, pool: Data<AppState>) -> impl Respond
     // Handle the query result
     match query_res {
         Ok(data) => {
-            let token = generate_jwt_token(
+            let access_token = match generate_jwt_token(
                 data.user_id,
                 env::var("ACCESS_SECRET_KEY").unwrap().to_string(),
-            );
-            match token {
-                Ok(token) => {
-                    let token_string: String = token.token.unwrap();
-                    // Assuming you're using a library like `actix_web::http::Cookie`
-                    let cookie = Cookie::build("token", token_string)
-                        .path("/")
-                        .http_only(true)
-                        .max_age(Duration::minutes(60 * 60))
-                        .finish();
-                    // Return response with token in cookie and user data in body
-                    HttpResponse::Ok().cookie(cookie).json(json!({
-                        "status" : "success",
-                        "data" : data
-                    }))
-                }
+            ) {
+                Ok(token) => token,
                 Err(err) => {
-                    // Handle error from token generation
-                    HttpResponse::InternalServerError().json(json!({
-                        "status" : "fail",
-                        "error"  : err.to_string()
-                    }))
+                    return HttpResponse::InternalServerError()
+                        .json(json!({ "error": err.to_string() }))
                 }
-            }
+            };
+
+            // Generate refresh token
+            let refresh_token = match generate_jwt_token(
+                data.user_id,
+                env::var("REFRESH_SECRET_KEY").unwrap().to_string(),
+            ) {
+                Ok(token) => token,
+                Err(err) => {
+                    return HttpResponse::InternalServerError()
+                        .json(json!({ "error": err.to_string() }))
+                }
+            };
+
+            // Build access and refresh cookies
+            let refresh_cookie =
+                Cookie::build("refresh_token", refresh_token.token.clone().unwrap())
+                    .path("/")
+                    .http_only(true)
+                    .same_site(actix_web::cookie::SameSite::None)
+                    .secure(true)
+                    .max_age(Duration::days(
+                        env::var("REFRESH_TOKEN_AGE")
+                            .unwrap()
+                            .parse::<i64>()
+                            .unwrap(),
+                    ))
+                    .finish();
+            let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
+                .path("/")
+                .http_only(true)
+                .secure(true)
+                .same_site(actix_web::cookie::SameSite::None)
+                .max_age(Duration::days(
+                    env::var("ACCESS_TOKEN_AGE")
+                        .unwrap()
+                        .parse::<i64>()
+                        .unwrap(),
+                ))
+                .finish();
+            // Return response with token in cookie and user data in body
+            HttpResponse::Ok()
+                .cookie(access_cookie)
+                .cookie(refresh_cookie)
+                .json(json!({
+                    "status" : "success",
+                    "data" : data
+                }))
         }
         Err(err) => {
-            eprintln!("Failed to add user: {:?}", err);
+            // Handle error from token generation
             HttpResponse::InternalServerError().json(json!({
-                "Error": err.to_string(),
+                "status" : "fail",
+                "error"  : err.to_string()
             }))
         }
     }
@@ -131,10 +162,9 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
 
         // Build access and refresh cookies
         let refresh_cookie = Cookie::build("refresh_token", refresh_token.token.clone().unwrap())
-            .path("/")
             .http_only(true)
-            .same_site(actix_web::cookie::SameSite::None)
             .secure(true)
+            .same_site(actix_web::cookie::SameSite::None)
             .max_age(Duration::days(
                 env::var("REFRESH_TOKEN_AGE")
                     .unwrap()
@@ -143,7 +173,6 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
             ))
             .finish();
         let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
-            .path("/")
             .http_only(true)
             .secure(true)
             .same_site(actix_web::cookie::SameSite::None)
@@ -160,15 +189,15 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
             .cookie(access_cookie)
             .cookie(refresh_cookie)
             .json(json!({
-                "status" : "success",
-                "data": json!({
-                    "username" : user.username,
-                    "email"  : user.email,
-                    "f_name" : user.first_name,
-                    "l_name" : user.last_name,
-                    "phone_number" : user.phone_number,
-                }),
-                "access_token" : access_token.token.unwrap()
+                "status": "success",
+                "data": {
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "phone_number": user.phone_number
+                },
+                "access_token": access_token.token.unwrap(),
             }))
     } else {
         // Password doesn't match
@@ -226,10 +255,9 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
     };
     // Set new access token cookie
     let access_cookie = Cookie::build("access_token", access_token.token.clone().unwrap())
-        .path("/")
         .http_only(true)
-        .same_site(actix_web::cookie::SameSite::None)
         .secure(true)
+        .same_site(actix_web::cookie::SameSite::None)
         .max_age(Duration::days(
             env::var("ACCESS_TOKEN_AGE")
                 .unwrap()
@@ -237,19 +265,32 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
                 .unwrap(),
         ))
         .finish();
-
+    let refresh_cookie = Cookie::build("refresh_token", refresh_token.clone())
+        .http_only(true)
+        .secure(true)
+        .same_site(actix_web::cookie::SameSite::None)
+        .max_age(Duration::days(
+            env::var("REFRESH_TOKEN_AGE")
+                .unwrap()
+                .parse::<i64>()
+                .unwrap(),
+        ))
+        .finish();
     // Return response with new access token, refresh token, and user data
-    HttpResponse::Ok().cookie(access_cookie).json(json!({
-        "status": "success",
-        "data": {
-            "username": user.username,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "phone_number": user.phone_number
-        },
-        "access_token": access_token.token,
-    }))
+    HttpResponse::Ok()
+        // .cookie(refresh_cookie)
+        .cookie(access_cookie)
+        .json(json!({
+            "status": "success",
+            "data": {
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "phone_number": user.phone_number
+            },
+            "access_token": access_token.token,
+        }))
 }
 
 // Function to fetch user data by ID

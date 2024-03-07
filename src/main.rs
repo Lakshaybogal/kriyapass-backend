@@ -11,8 +11,8 @@ use tokio::time::Duration; // Add missing imports
                            // Import module
 mod database;
 mod handler;
-mod models;
 mod jwt_auth;
+mod models;
 mod token;
 use crate::database::connect_database;
 use crate::models::AppState;

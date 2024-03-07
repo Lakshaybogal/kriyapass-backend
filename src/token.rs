@@ -48,7 +48,6 @@ pub fn verify_jwt_token(
     token: &str,
 ) -> Result<TokenDetails, jsonwebtoken::errors::Error> {
     let decoded_public_key = public_key;
-
     let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
 
     let decoded = jsonwebtoken::decode::<TokenClaims>(
