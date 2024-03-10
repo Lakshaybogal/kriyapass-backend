@@ -76,7 +76,7 @@ pub struct EventWithTickets {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewTicket {
     pub event_id: Uuid,
-    pub user_id: Uuid,
+    pub email: String,
     pub event_name: String,
     pub ticket_type: String,
     pub price: i32,

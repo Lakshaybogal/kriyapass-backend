@@ -17,7 +17,7 @@ async fn generate_ticket(
     pool: Data<AppState>,
     jwt_gaurd: jwt_auth::JwtMiddleware,
 ) -> impl Responder {
-    if jwt_gaurd.user.user_id == ticket_data.user_id {
+    if jwt_gaurd.user.email == ticket_data.email {
         let ticket_insert = sqlx::query_as!(
             Ticket,
             "INSERT INTO tickets (event_id ,ticket_id, event_name ,ticket_type, price, availability)

@@ -1,11 +1,11 @@
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenDetails {
     pub token: Option<String>,
-    pub user_id: uuid::Uuid,
-    // pub email: String,
+    pub user_id: Uuid,
     pub expires_in: Option<i64>,
 }
 
@@ -16,47 +16,44 @@ pub struct TokenClaims {
 }
 
 pub fn generate_jwt_token(
-    user_id: uuid::Uuid,
-    private_key: String,
+    user_id: Uuid,
+    private_key: &str,
+    time: i64,
 ) -> Result<TokenDetails, jsonwebtoken::errors::Error> {
-    let decoded_private_key = private_key;
-
     let now = chrono::Utc::now();
-    let mut token_details = TokenDetails {
-        user_id,
-        expires_in: Some((now + chrono::Duration::minutes(60)).timestamp()),
-        token: None,
-    };
+    let expires_in = (now + chrono::Duration::minutes(60 * time * 24)).timestamp();
 
     let claims = TokenClaims {
-        sub: token_details.user_id.to_string(),
-        exp: token_details.expires_in.unwrap(),
+        sub: user_id.to_string(),
+        exp: expires_in,
     };
 
-    let token = jsonwebtoken::encode(
-        &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+    let token = encode(
+        &Header::new(Algorithm::HS256),
         &claims,
-        &jsonwebtoken::EncodingKey::from_secret(decoded_private_key.as_bytes()),
-    )
-    .unwrap();
-    token_details.token = Some(token);
-    Ok(token_details)
+        &EncodingKey::from_secret(private_key.as_bytes()),
+    )?;
+
+    Ok(TokenDetails {
+        token: Some(token),
+        user_id,
+        expires_in: Some(expires_in),
+    })
 }
 
 pub fn verify_jwt_token(
-    public_key: String,
+    public_key: &str,
     token: &str,
 ) -> Result<TokenDetails, jsonwebtoken::errors::Error> {
-    let decoded_public_key = public_key;
-    let validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
+    let validation = Validation::new(Algorithm::HS256);
 
-    let decoded = jsonwebtoken::decode::<TokenClaims>(
+    let decoded = decode::<TokenClaims>(
         token,
-        &jsonwebtoken::DecodingKey::from_secret(decoded_public_key.as_bytes()),
+        &DecodingKey::from_secret(public_key.as_bytes()),
         &validation,
     )?;
 
-    let user_id = Uuid::parse_str(decoded.claims.sub.as_str()).unwrap();
+    let user_id = Uuid::parse_str(&decoded.claims.sub).unwrap();
 
     Ok(TokenDetails {
         token: None,

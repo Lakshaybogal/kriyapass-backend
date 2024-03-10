@@ -4,7 +4,7 @@ use actix_rt::{spawn, time::interval};
 use actix_web::{
     http::header,
     middleware::Logger,
-    web::{self, scope, Data},
+    web::{self, Data},
     App, HttpResponse, HttpServer, Responder,
 };
 use tokio::time::Duration; // Add missing imports
@@ -22,8 +22,8 @@ use handler::{
         check_and_update_events, create_event, delete_event, get_event, get_event_by_user,
         get_events,
     },
-    ticket_handlers::{delete_ticket, generate_ticket},
-    user_handlers::{add_user, delete_user, get_user, refresh_access_token_handler},
+    ticket_handlers::{delete_ticket, generate_ticket, get_ticket},
+    user_handlers::{add_user, delete_user, get_user, logout, refresh_access_token_handler},
 };
 
 // Main function
@@ -62,32 +62,22 @@ async fn main() -> std::io::Result<()> {
             .app_data(Data::new(AppState { db: pool.clone() }))
             .wrap(cors)
             .route("/", web::get().to(greet))
-            .service(
-                scope("/users")
-                    .service(get_user)
-                    .service(add_user)
-                    .service(refresh_access_token_handler)
-                    .service(delete_user),
-            )
-            .service(
-                scope("/tickets")
-                    .service(generate_ticket)
-                    .service(delete_ticket),
-            )
-            .service(
-                scope("/events")
-                    .service(create_event)
-                    .service(get_event)
-                    .service(get_event_by_user)
-                    .service(get_events)
-                    .service(delete_event),
-            )
-            .service(
-                scope("/bookings")
-                    .service(book_ticket)
-                    .service(ticket_verification)
-                    .service(delete_booking),
-            )
+            .service(get_user)
+            .service(add_user)
+            .service(logout)
+            .service(refresh_access_token_handler)
+            .service(delete_user)
+            .service(generate_ticket)
+            .service(get_ticket)
+            .service(delete_ticket)
+            .service(create_event)
+            .service(get_event)
+            .service(get_event_by_user)
+            .service(get_events)
+            .service(delete_event)
+            .service(book_ticket)
+            .service(ticket_verification)
+            .service(delete_booking)
             .wrap(Logger::default())
     })
     .bind("127.0.0.1:8080")?

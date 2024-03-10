@@ -1,18 +1,17 @@
+use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
+use actix_web::{dev::Payload, Error as ActixWebError};
+use actix_web::{web, FromRequest, HttpRequest};
 use core::fmt;
+use futures::executor::block_on;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     future::{ready, Ready},
 };
 
-use actix_web::error::{ErrorInternalServerError, ErrorUnauthorized};
-use actix_web::{dev::Payload, Error as ActixWebError};
-use actix_web::{web, FromRequest, HttpRequest};
-use futures::executor::block_on;
-use serde::{Deserialize, Serialize};
-
 use crate::models::AppState;
 use crate::models::User;
-use crate::token;
+use crate::token::verify_jwt_token;
 
 #[derive(Debug, Serialize)]
 struct ErrorResponse {
@@ -37,30 +36,64 @@ impl FromRequest for JwtMiddleware {
     fn from_request(req: &HttpRequest, _: &mut Payload) -> Self::Future {
         let data = req.app_data::<web::Data<AppState>>().unwrap();
 
-        let access_token = match req.cookie("access_token") {
-            Some(c) => c.value().to_string(),
-            None => {
+        // let access_token = req
+        //     .cookie("access_token")
+        //     .map(|c| c.value().to_string())
+        //     .or_else(|| {
+        //         req.headers()
+        //             .get(http::header::AUTHORIZATION)
+        //             .map(|h| h.to_str().unwrap().split_at(7).1.to_string())
+        //     });
+
+        // let access_token = match req.cookie("access_token") {
+        //     Some(c) => c.value().to_string(),
+        //     None => {
+        //         let json_error = ErrorResponse {
+        //             status: "fail".to_string(),
+        //             message: "You are not logged in, please provide token".to_string(),
+        //         };
+        //         return ready(Err(ErrorUnauthorized(json_error)));
+        //     }
+        // };
+
+        // if access_token.is_none() {
+        //     let json_error = ErrorResponse {
+        //         status: "fail".to_string(),
+        //         message: "You are not logged in, please provide token".to_string(),
+        //     };
+        //     return ready(Err(ErrorUnauthorized(json_error)));
+        // }
+
+        let access_token = match (
+            req.headers()
+                .get("Authorization")
+                .and_then(|value| value.to_str().ok())
+                .map(|value| value.trim_start_matches("Bearer "))
+                .map(|token| token.to_string()),
+            req.cookie("access_token").map(|c| c.value().to_string()),
+        ) {
+            (Some(token), _) => token,
+            (_, Some(token)) => token,
+            _ => {
                 let json_error = ErrorResponse {
                     status: "fail".to_string(),
-                    message: format!("{:?}", "cookie not found"),
+                    message: "Access token not found in headers or cookies".to_string(),
                 };
                 return ready(Err(ErrorUnauthorized(json_error)));
             }
         };
 
-        let access_token_details = match token::verify_jwt_token(
-            env::var("ACCESS_SECRET_KEY").unwrap().to_string(),
-            &access_token,
-        ) {
-            Ok(token_details) => token_details,
-            Err(e) => {
-                let json_error = ErrorResponse {
-                    status: "fail".to_string(),
-                    message: format!("{:?}", e),
-                };
-                return ready(Err(ErrorUnauthorized(json_error)));
-            }
-        };
+        let access_token_details =
+            match verify_jwt_token(&env::var("ACCESS_SECRET_KEY").unwrap(), &access_token) {
+                Ok(token_details) => token_details,
+                Err(e) => {
+                    let json_error = ErrorResponse {
+                        status: "fail".to_string(),
+                        message: format!("{:?}", e),
+                    };
+                    return ready(Err(ErrorUnauthorized(json_error)));
+                }
+            };
 
         let user_id = uuid::Uuid::parse_str(&access_token_details.user_id.to_string()).unwrap();
 
