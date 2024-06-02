@@ -15,44 +15,41 @@ use uuid::Uuid;
 async fn generate_ticket(
     ticket_data: Json<NewTicket>,
     pool: Data<AppState>,
-    jwt_gaurd: jwt_auth::JwtMiddleware,
+    _: jwt_auth::JwtMiddleware,
 ) -> impl Responder {
-    if jwt_gaurd.user.email == ticket_data.email {
-        let ticket_insert = sqlx::query_as!(
-            Ticket,
-            "INSERT INTO tickets (event_id ,ticket_id, event_name ,ticket_type, price, availability)
+    // Parse availability from string to integer
+    let availability: i32 = ticket_data.availability.parse().unwrap_or(0);
+
+    let ticket_insert = sqlx::query_as!(
+        Ticket,
+        "INSERT INTO tickets (event_id ,ticket_id, event_name ,ticket_type, price, availability)
                 VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING *",
-            ticket_data.event_id,
-            Uuid::new_v4(),
-            ticket_data.event_name,
-            ticket_data.ticket_type,
-            ticket_data.price,
-            ticket_data.availability
-        )
-        .fetch_one(&pool.db)
-        .await;
+        ticket_data.event_id,
+        Uuid::new_v4(),
+        ticket_data.event_name,
+        ticket_data.ticket_type,
+        ticket_data.price,
+        availability
+    )
+    .fetch_one(&pool.db)
+    .await;
 
-        match ticket_insert {
-            Ok(ticket) => HttpResponse::Ok().json(json!({
-                "status" : "sucess",
-                "data" : ticket
-            })),
-            Err(err) => {
-                eprintln!("Failed to create ticket: {:?}", err);
-                HttpResponse::InternalServerError().json(json!({
-                    "status" : "fail",
-                    "Error": err.to_string(),
-                }))
-            }
+    match ticket_insert {
+        Ok(ticket) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "data": ticket
+        })),
+        Err(err) => {
+            eprintln!("Failed to create ticket: {:?}", err);
+            HttpResponse::InternalServerError().json(json!({
+                "status": "fail",
+                "Error": err.to_string(),
+            }))
         }
-    } else {
-        HttpResponse::NonAuthoritativeInformation().json(json!({
-            "status" : "fail",
-            "message": "Unauthorize User",
-        }))
     }
 }
+
 #[get("/get_ticket/{event_id}")]
 async fn get_ticket(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
     let event_id = event_id.into_inner();

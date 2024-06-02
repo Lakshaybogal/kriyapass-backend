@@ -160,6 +160,7 @@ async fn get_user(data: Json<Login>, pool: Data<AppState>) -> impl Responder {
             .json(json!({
                 "status": "success",
                 "data": {
+                    "user_id" : user.user_id,
                     "username": user.username,
                     "email": user.email,
                     "first_name": user.first_name,
@@ -237,6 +238,7 @@ async fn refresh_access_token_handler(req: HttpRequest, pool: Data<AppState>) ->
         .json(json!({
             "status": "success",
             "data": {
+                "user_id" : user.user_id,
                 "username": user.username,
                 "email": user.email,
                 "first_name": user.first_name,

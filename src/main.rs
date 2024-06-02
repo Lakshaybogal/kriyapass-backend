@@ -17,7 +17,7 @@ mod token;
 use crate::database::connect_database;
 use crate::models::AppState;
 use handler::{
-    booking_handler::{book_ticket, delete_booking, ticket_verification},
+    booking_handler::{book_ticket, delete_booking, get_bookings, ticket_verification},
     event_handlers::{
         check_and_update_events, create_event, delete_event, get_event, get_event_by_user,
         get_events,
@@ -76,6 +76,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_events)
             .service(delete_event)
             .service(book_ticket)
+            .service(get_bookings)
             .service(ticket_verification)
             .service(delete_booking)
             .wrap(Logger::default())

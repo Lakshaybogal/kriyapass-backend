@@ -57,7 +57,7 @@ async fn create_event(
     }
 }
 
-#[get("/events/{event_id}")]
+#[get("/event/{event_id}")]
 async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder {
     let event_id = event_id.into_inner();
     // let user_id = token_details.user_id;
@@ -69,11 +69,11 @@ async fn get_event(event_id: Path<Uuid>, pool: Data<AppState>) -> impl Responder
         FROM
             events
         WHERE
-            user_id = $1
+            event_id = $1
         ",
         event_id
     )
-    .fetch_all(&pool.db)
+    .fetch_one(&pool.db)
     .await;
 
     match event_data {

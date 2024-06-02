@@ -1,7 +1,7 @@
 use crate::models::{Booking, NewBooking};
 use crate::{jwt_auth, AppState};
 use actix_web::{
-    delete, patch, post,
+    delete, get, patch, post,
     web::{Data, Json, Path},
     HttpResponse, Responder,
 };
@@ -16,21 +16,26 @@ async fn book_ticket(
 ) -> HttpResponse {
     let booking = booking.into_inner();
     let user_id = jwt_guard.user.user_id;
+
+    // Parse price to an integer
+    let price: i32 = booking.price.parse().unwrap_or(0);
+    let quantity: i32 = booking.quantity.parse().unwrap_or(0);
     // Calculate total price if both quantity and price are present
-    let total_price = booking.quantity * booking.price;
+    let total_price = quantity * price;
     let booking_id = Uuid::new_v4();
 
     let query_res = sqlx::query_as!(
         Booking,
-        "INSERT INTO bookings (booking_id, event_name, ticket_id, user_id, quantity, total_price)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO bookings (booking_id, event_name, ticket_id, user_id, quantity, total_price,verified)
+        VALUES ($1, $2, $3, $4, $5, $6,$7)
         RETURNING *",
         booking_id,
         booking.event_name,
         booking.ticket_id,
         user_id,
         booking.quantity,
-        total_price
+        total_price.to_string(),
+        false
     )
     .fetch_one(&pool.db)
     .await;
@@ -39,7 +44,7 @@ async fn book_ticket(
         Ok(data) => {
             match sqlx::query!(
                 "UPDATE tickets SET availability = availability - $1 WHERE ticket_id = $2",
-                data.quantity,
+                quantity, // Use quantity directly for subtraction
                 data.ticket_id
             )
             .execute(&pool.db)
@@ -58,6 +63,31 @@ async fn book_ticket(
         Err(err) => HttpResponse::BadRequest().json(json!({
             "status": "fail",
             "error": format!("Failed to book ticket: {}", err)
+        })),
+    }
+}
+
+#[get("/bookings")]
+pub async fn get_bookings(
+    pool: Data<AppState>,
+    jwt_guard: jwt_auth::JwtMiddleware,
+) -> impl Responder {
+    let user_id = jwt_guard.user.user_id;
+    match sqlx::query_as!(
+        Booking,
+        "Select * from bookings where user_id = $1",
+        user_id
+    )
+    .fetch_all(&pool.db)
+    .await
+    {
+        Ok(tickets) => HttpResponse::Ok().json(json!({
+            "status" : "success",
+            "data" : tickets,
+        })),
+        Err(err) => HttpResponse::InternalServerError().json(json!({
+            "status" : "fail",
+            "error" : err.to_string()
         })),
     }
 }

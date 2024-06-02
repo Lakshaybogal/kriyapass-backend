@@ -32,22 +32,21 @@ pub struct Event {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Ticket {
     pub ticket_id: Uuid,
-    pub event_id: Option<Uuid>,
     pub event_name: Option<String>,
+    pub event_id: Option<Uuid>,
     pub ticket_type: Option<String>,
-    pub price: i32,
     pub availability: Option<i32>,
+    pub price: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Booking {
     pub booking_id: Uuid,
     pub user_id: Option<Uuid>,
-    pub event_id: Option<Uuid>,
     pub event_name: Option<String>,
     pub ticket_id: Option<Uuid>,
-    pub quantity: i32,
-    pub total_price: i32,
+    pub quantity: String,
+    pub total_price: String,
     pub booking_date: Option<NaiveDateTime>,
     pub verified: bool,
 }
@@ -67,29 +66,22 @@ pub struct NewEvent {
     pub event_description: String,
 }
 
-#[derive(Debug, Deserialize, serde::Serialize)]
-pub struct EventWithTickets {
-    pub event: Event,
-    pub tickets: Vec<Ticket>,
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewTicket {
     pub event_id: Uuid,
     pub email: String,
     pub event_name: String,
     pub ticket_type: String,
-    pub price: i32,
-    pub availability: i32,
+    pub price: String,
+    pub availability: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NewBooking {
-    pub user_id: Uuid,
     pub event_name: String,
     pub ticket_id: Uuid,
-    pub quantity: i32,
-    pub price: i32,
+    pub quantity: String,
+    pub price: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
